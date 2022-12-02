@@ -20,7 +20,7 @@ mod tests {
     #[test]
     fn test_process_part2() {
         let input = "input";
-        let result = process_part1(input);
+        let result = process_part2(input);
         assert_eq!("INPUT", result);
     }
 }
