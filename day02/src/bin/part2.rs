@@ -1,4 +1,4 @@
-use day00::process_part2;
+use day02::process_part2;
 use std::fs::read_to_string;
 
 fn main() {
