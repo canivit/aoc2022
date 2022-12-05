@@ -1,9 +1,9 @@
 pub fn process_part1(input: &str) -> u32 {
-    input.lines().map(|line| line_score(line.trim())).sum()
+    input.lines().map(|line| line_score_p1(line.trim())).sum()
 }
 
-pub fn process_part2(input: &str) -> String {
-    input.to_uppercase()
+pub fn process_part2(input: &str) -> u32 {
+    input.lines().map(|line| line_score_p2(line.trim())).sum()
 }
 
 #[derive(Clone, Copy)]
@@ -13,13 +13,20 @@ enum Shape {
     Scissors,
 }
 
+#[derive(Clone, Copy)]
+enum Outcome {
+    Win,
+    Draw,
+    Lose,
+}
+
 const ROCK_SCORE: u32 = 1;
 const PAPER_SCORE: u32 = 2;
 const SCISSORS_SCORE: u32 = 3;
 
-const LOSE_SCORE: u32 = 0;
-const DRAW_SCORE: u32 = 3;
 const WIN_SCORE: u32 = 6;
+const DRAW_SCORE: u32 = 3;
+const LOSE_SCORE: u32 = 0;
 
 const LEFT_ROCK_CHAR: char = 'A';
 const LEFT_PAPER_CHAR: char = 'B';
@@ -29,14 +36,29 @@ const RIGHT_ROCK_CHAR: char = 'X';
 const RIGHT_PAPER_CHAR: char = 'Y';
 const RIGHT_SCISSORS_CHAR: char = 'Z';
 
-fn line_score(line: &str) -> u32 {
+const LOSE_CHAR: char = 'X';
+const DRAW_CHAR: char = 'Y';
+const WIN_CHAR: char = 'Z';
+
+fn line_to_char_pair(line: &str) -> (char, char) {
     let left_char = line.split(" ").nth(0).unwrap().chars().nth(0).unwrap();
-    let left_shape = left_char_to_shape(left_char);
-
     let right_char = line.split(" ").nth(1).unwrap().chars().nth(0).unwrap();
-    let right_shape = right_char_to_shape(right_char);
+    (left_char, right_char)
+}
 
+fn line_score_p1(line: &str) -> u32 {
+    let (left_char, right_char) = line_to_char_pair(line);
+    let left_shape = left_char_to_shape(left_char);
+    let right_shape = right_char_to_shape(right_char);
     round_score(left_shape, right_shape)
+}
+
+fn line_score_p2(line: &str) -> u32 {
+    let (left_char, right_char) = line_to_char_pair(line);
+    let left_shape = left_char_to_shape(left_char);
+    let outcome = char_to_outcome(right_char);
+    let right_shape = find_right_shape(left_shape, outcome);
+    shape_score(right_shape) + outcome_score(outcome)
 }
 
 fn left_char_to_shape(left_char: char) -> Shape {
@@ -57,8 +79,17 @@ fn right_char_to_shape(right_char: char) -> Shape {
     }
 }
 
+fn char_to_outcome(c: char) -> Outcome {
+    match c {
+        LOSE_CHAR => Outcome::Lose,
+        DRAW_CHAR => Outcome::Draw,
+        WIN_CHAR => Outcome::Win,
+        _ => panic!("Invalid outcome character"),
+    }
+}
+
 fn round_score(left_shape: Shape, right_shape: Shape) -> u32 {
-    shape_score(right_shape) + outcome_score(left_shape, right_shape)
+    shape_score(right_shape) + outcome_score(outcome_of_round(left_shape, right_shape))
 }
 
 fn shape_score(shape: Shape) -> u32 {
@@ -69,19 +100,41 @@ fn shape_score(shape: Shape) -> u32 {
     }
 }
 
-fn outcome_score(left_shape: Shape, right_shape: Shape) -> u32 {
+fn outcome_score(outcome: Outcome) -> u32 {
+    match outcome {
+        Outcome::Win => WIN_SCORE,
+        Outcome::Draw => DRAW_SCORE,
+        Outcome::Lose => LOSE_SCORE,
+    }
+}
+
+fn outcome_of_round(left_shape: Shape, right_shape: Shape) -> Outcome {
     match (left_shape, right_shape) {
-        (Shape::Rock, Shape::Rock) => DRAW_SCORE,
-        (Shape::Rock, Shape::Paper) => WIN_SCORE,
-        (Shape::Rock, Shape::Scissors) => LOSE_SCORE,
+        (Shape::Rock, Shape::Rock) => Outcome::Draw,
+        (Shape::Rock, Shape::Paper) => Outcome::Win,
+        (Shape::Rock, Shape::Scissors) => Outcome::Lose,
 
-        (Shape::Paper, Shape::Rock) => LOSE_SCORE,
-        (Shape::Paper, Shape::Paper) => DRAW_SCORE,
-        (Shape::Paper, Shape::Scissors) => WIN_SCORE,
+        (Shape::Paper, Shape::Rock) => Outcome::Lose,
+        (Shape::Paper, Shape::Paper) => Outcome::Draw,
+        (Shape::Paper, Shape::Scissors) => Outcome::Win,
 
-        (Shape::Scissors, Shape::Rock) => WIN_SCORE,
-        (Shape::Scissors, Shape::Paper) => LOSE_SCORE,
-        (Shape::Scissors, Shape::Scissors) => DRAW_SCORE,
+        (Shape::Scissors, Shape::Rock) => Outcome::Win,
+        (Shape::Scissors, Shape::Paper) => Outcome::Lose,
+        (Shape::Scissors, Shape::Scissors) => Outcome::Draw,
+    }
+}
+
+fn find_right_shape(left_shape: Shape, outcome: Outcome) -> Shape {
+    match (left_shape, outcome) {
+        (Shape::Rock, Outcome::Win) => Shape::Paper,
+        (Shape::Rock, Outcome::Draw) => Shape::Rock,
+        (Shape::Rock, Outcome::Lose) => Shape::Scissors,
+        (Shape::Paper, Outcome::Win) => Shape::Scissors,
+        (Shape::Paper, Outcome::Draw) => Shape::Paper,
+        (Shape::Paper, Outcome::Lose) => Shape::Rock,
+        (Shape::Scissors, Outcome::Win) => Shape::Rock,
+        (Shape::Scissors, Outcome::Draw) => Shape::Scissors,
+        (Shape::Scissors, Outcome::Lose) => Shape::Paper,
     }
 }
 
@@ -101,8 +154,11 @@ mod tests {
 
     #[test]
     fn test_process_part2() {
-        let input = "input";
+        let input = "A Y
+            B X
+            C Z";
+
         let result = process_part2(input);
-        assert_eq!("INPUT", result);
+        assert_eq!(12, result);
     }
 }
