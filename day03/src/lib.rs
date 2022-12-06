@@ -1,17 +1,31 @@
 use std::collections::HashSet;
 
 pub fn process_part1(input: &str) -> u32 {
-    input.lines().map(|line| priority_of_word(line.trim())).sum()
+    input
+        .lines()
+        .map(|line| priority_of_word(line.trim()))
+        .sum()
 }
 
-pub fn process_part2(input: &str) -> String {
-    input.to_uppercase()
+pub fn process_part2(input: &str) -> u32 {
+    input
+        .lines()
+        .map(&str::trim)
+        .collect::<Vec<&str>>()
+        .chunks(3)
+        .map(priority_of_group)
+        .sum()
+}
+
+fn priority_of_group(group: &[&str]) -> u32 {
+    let common_chars = find_common_chars(group[0], &find_common_chars(group[1], group[2]));
+    common_chars.chars().map(priority_of_char).sum()
 }
 
 fn priority_of_word(word: &str) -> u32 {
     let (first, second) = split_into_half(word);
     let common_chars = find_common_chars(first, second);
-    common_chars.into_iter().map(priority_of_char).sum()
+    common_chars.chars().map(priority_of_char).sum()
 }
 
 fn priority_of_char(c: char) -> u32 {
@@ -28,7 +42,7 @@ fn split_into_half(word: &str) -> (&str, &str) {
     (&word[..mid], &word[mid..])
 }
 
-fn find_common_chars(s1: &str, s2: &str) -> Vec<char> {
+fn find_common_chars(s1: &str, s2: &str) -> String {
     let set1: HashSet<char> = HashSet::from_iter(s1.chars());
     let set2: HashSet<char> = HashSet::from_iter(s2.chars());
     set1.into_iter().filter(|c| set2.contains(c)).collect()
@@ -53,9 +67,32 @@ mod tests {
 
     #[test]
     fn test_process_part2() {
-        let input = "input";
+        let input = "vJrwpWtwJgWrhcsFMMfFFhFp
+            jqHRNqRjqzjGDLGLrsFMfFZSrLrFZsSL
+            PmmdzqPrVvPwwTWBwg
+            wMqvLMZHhHMvwLHjbvcjnnSBnvTQFn
+            ttgJtRGJQctTZtZT
+            CrZsJsPPZsGzwwsLwLmpwMDw";
+
         let result = process_part2(input);
-        assert_eq!("INPUT", result);
+        assert_eq!(70, result);
+    }
+
+    #[test]
+    fn test_priority_of_group() {
+        let group = &[
+            "vJrwpWtwJgWrhcsFMMfFFhFp",
+            "jqHRNqRjqzjGDLGLrsFMfFZSrLrFZsSL",
+            "PmmdzqPrVvPwwTWBwg",
+        ];
+        assert_eq!(18, priority_of_group(group));
+
+        let group = &[
+            "wMqvLMZHhHMvwLHjbvcjnnSBnvTQFn",
+            "ttgJtRGJQctTZtZT",
+            "CrZsJsPPZsGzwwsLwLmpwMDw",
+        ];
+        assert_eq!(52, priority_of_group(group));
     }
 
     #[test]
@@ -90,9 +127,9 @@ mod tests {
     #[test]
     fn test_find_common_chars() {
         let common_chars = find_common_chars("vJrwpWtwJgWr", "hcsFMMfFFhFp");
-        assert_eq!(Vec::from(['p']), common_chars);
+        assert_eq!("p", common_chars);
 
         let common_chars = find_common_chars("jqHRNqRjqzjGDLGL", "rsFMfFZSrLrFZsSL");
-        assert_eq!(Vec::from(['L']), common_chars);
+        assert_eq!("L", common_chars);
     }
 }
