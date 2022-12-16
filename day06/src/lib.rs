@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use itertools::Itertools;
 
 pub fn process_part1(message: &str) -> usize {
     find_first_marker(message, 4)
@@ -11,20 +11,14 @@ pub fn process_part2(message: &str) -> usize {
 fn find_first_marker(message: &str, marker_length: usize) -> usize {
     let vec: Vec<char> = message.chars().collect();
     let slice = &vec[..];
-    let first_marker = slice
-        .windows(marker_length)
-        .enumerate()
-        .find(|(_, window)| are_all_unique(window));
-
-    match first_marker {
-        Some((idx, _)) => idx + marker_length,
+    match slice.windows(marker_length).position(are_all_unique) {
+        Some(idx) => idx + marker_length,
         None => message.len(),
     }
 }
 
 fn are_all_unique(slice: &[char]) -> bool {
-    let set: HashSet<&char> = slice.into_iter().collect();
-    set.len() == slice.len()
+    slice.iter().all_unique()
 }
 
 #[cfg(test)]
