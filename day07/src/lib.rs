@@ -1,11 +1,47 @@
 use std::{rc::Rc, vec};
 
-pub fn process_part1(input: &str) -> String {
-    input.to_uppercase()
+pub fn process_part1(input: &str) -> usize {
+    let fs = create_fs_from_commands(input.lines().collect());
+    process_part1_help(&fs)
 }
 
-pub fn process_part2(input: &str) -> String {
-    input.to_uppercase()
+pub fn process_part2(input: &str) -> usize {
+    let fs = create_fs_from_commands(input.lines().collect());
+    process_part2_help(&fs)
+}
+
+fn process_part1_help(fs: &Inode) -> usize {
+    fs.flatten()
+        .iter()
+        .filter_map(|item| {
+            if item.is_dir() {
+                match item.size() {
+                    s if s <= 100000 => Some(s),
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        })
+        .sum()
+}
+
+fn process_part2_help(fs: &Inode) -> usize {
+    let required_space = 30000000 - (70000000 - fs.size());
+    fs.flatten()
+        .iter()
+        .filter_map(|item| {
+            if item.is_dir() {
+                match item.size() {
+                    s if s >= required_space => Some(s),
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        })
+        .min()
+        .unwrap()
 }
 
 fn create_fs_from_commands(commands: Vec<&str>) -> Inode {
@@ -26,7 +62,7 @@ fn create_fs_from_commands(commands: Vec<&str>) -> Inode {
             ["dir", name] => {
                 root = root.insert_item(
                     &path,
-                    &Rc::new(Inode::Directory(Directory::new(
+                    Rc::new(Inode::Directory(Directory::new(
                         name.to_string(),
                         Vec::new(),
                     ))),
@@ -35,7 +71,7 @@ fn create_fs_from_commands(commands: Vec<&str>) -> Inode {
             [size, name] => {
                 root = root.insert_item(
                     &path,
-                    &Rc::new(Inode::File(File::new(
+                    Rc::new(Inode::File(File::new(
                         name.to_string(),
                         size.parse().unwrap(),
                     ))),
@@ -54,7 +90,7 @@ enum Inode {
 }
 
 impl Inode {
-    fn insert_item(&self, path: &[&str], item: &Rc<Inode>) -> Inode {
+    fn insert_item(&self, path: &[&str], item: Rc<Inode>) -> Inode {
         match self {
             Self::File(file) => Self::File(File::new(file.name.to_string(), file.size)),
             Self::Directory(dir) => dir.insert_item(path, item),
@@ -69,17 +105,45 @@ impl Inode {
         }
     }
 
-    fn is_dir_with_name(&self, name: &str) -> bool {
+    fn is_dir(&self) -> bool {
         match self {
             Self::File(_) => false,
-            Self::Directory(dir) => dir.name.eq(name),
+            Self::Directory(_) => true,
         }
     }
 
-    fn map<T>(&self, func: fn(&Inode) -> T) -> Vec<T> {
+    fn name(&self) -> &str {
         match self {
-            Inode::File(_) => vec![func(&self)],
-            Inode::Directory(_) => todo!(),
+            Inode::File(file) => &file.name,
+            Inode::Directory(dir) => &dir.name,
+        }
+    }
+
+    fn size(&self) -> usize {
+        match self {
+            Self::File(file) => file.size(),
+            Self::Directory(dir) => dir.size(),
+        }
+    }
+
+    fn flatten(&self) -> Vec<Rc<Inode>> {
+        match self {
+            Self::File(_) => vec![Rc::new(Self::File(File::new(
+                self.name().to_string(),
+                self.size(),
+            )))],
+            Self::Directory(dir) => vec![Rc::new(Self::Directory(Directory::new(
+                self.name().to_string(),
+                dir.content.to_vec(),
+            )))]
+            .into_iter()
+            .chain(
+                dir.content
+                    .iter()
+                    .map(|item| item.flatten())
+                    .flat_map(|item| item),
+            )
+            .collect(),
         }
     }
 }
@@ -97,6 +161,10 @@ impl File {
     fn is_same(&self, other: &File) -> bool {
         self.name.eq(&other.name) && self.size == other.size
     }
+
+    fn size(&self) -> usize {
+        self.size
+    }
 }
 
 struct Directory {
@@ -109,15 +177,15 @@ impl Directory {
         Directory { name, content }
     }
 
-    fn insert_item(&self, path: &[&str], item: &Rc<Inode>) -> Inode {
+    fn insert_item(&self, path: &[&str], item: Rc<Inode>) -> Inode {
         match path.first() {
             Some(first) => {
                 let content: Vec<Rc<Inode>> = self
                     .content
                     .iter()
                     .map(|inode| {
-                        if inode.is_dir_with_name(first) {
-                            Rc::new(inode.insert_item(&path[1..], item))
+                        if inode.is_dir() && inode.name().eq(*first) {
+                            Rc::new(inode.insert_item(&path[1..], Rc::clone(&item)))
                         } else {
                             Rc::clone(inode)
                         }
@@ -148,6 +216,10 @@ impl Directory {
                 .zip(other.content.iter())
                 .all(|(item1, item2)| item1.is_same(item2))
     }
+
+    fn size(&self) -> usize {
+        self.content.iter().map(|item| item.size()).sum()
+    }
 }
 
 #[cfg(test)]
@@ -155,10 +227,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_process_part1() {
-        let input = "input";
-        let result = process_part1(input);
-        assert_eq!("INPUT", result);
+    fn test_process_part1_help() {
+        let fs = create_example_fs1();
+        assert_eq!(95437, process_part1_help(&fs));
+    }
+
+    #[test]
+    fn test_process_part2_help() {
+        let fs = create_example_fs1();
+        assert_eq!(24933642, process_part2_help(&fs));
     }
 
     #[test]
@@ -194,6 +271,12 @@ mod tests {
     }
 
     #[test]
+    fn test_size() {
+        let fs = create_example_fs1();
+        assert_eq!(48381165, fs.size())
+    }
+
+    #[test]
     fn test_is_same_fs() {
         assert!(create_example_fs1().is_same(&create_example_fs1()));
         assert!(!create_example_fs2().is_same(&create_example_fs3()));
@@ -206,7 +289,7 @@ mod tests {
             name: String::from("i"),
             size: 5,
         }));
-        let fs3 = fs2.insert_item(&vec!["c", "f"], &item);
+        let fs3 = fs2.insert_item(&vec!["c", "f"], item);
         assert!(fs3.is_same(&create_example_fs3()));
     }
 
