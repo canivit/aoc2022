@@ -1,4 +1,4 @@
-use std::vec;
+use std::{rc::Rc, vec};
 
 pub fn process_part1(input: &str) -> String {
     input.to_uppercase()
@@ -18,25 +18,27 @@ fn create_fs_from_commands(commands: Vec<&str>) -> Inode {
         let parts: Vec<&str> = cmd.split_whitespace().collect();
         match parts.as_slice() {
             ["$", "cd", "/"] => (),
-            ["$", "cd", ".."] => drop(path.pop()),
+            ["$", "cd", ".."] => {
+                path.pop();
+            }
             ["$", "cd", name] => path.push(name),
             ["$", _] => (),
             ["dir", name] => {
                 root = root.insert_item(
                     &path,
-                    &Inode::Directory(Directory {
-                        name: name.to_string(),
-                        content: Vec::new(),
-                    }),
+                    &Rc::new(Inode::Directory(Directory::new(
+                        name.to_string(),
+                        Vec::new(),
+                    ))),
                 )
             }
             [size, name] => {
                 root = root.insert_item(
                     &path,
-                    &Inode::File(File {
-                        name: name.to_string(),
-                        size: size.parse().unwrap(),
-                    }),
+                    &Rc::new(Inode::File(File::new(
+                        name.to_string(),
+                        size.parse().unwrap(),
+                    ))),
                 )
             }
             _ => (),
@@ -51,19 +53,10 @@ enum Inode {
     Directory(Directory),
 }
 
-impl Clone for Inode {
-    fn clone(&self) -> Self {
-        match self {
-            Self::File(file) => Self::File(file.clone()),
-            Self::Directory(dir) => Self::Directory(dir.clone()),
-        }
-    }
-}
-
 impl Inode {
-    fn insert_item(&self, path: &[&str], item: &Inode) -> Inode {
+    fn insert_item(&self, path: &[&str], item: &Rc<Inode>) -> Inode {
         match self {
-            Self::File(file) => Self::File(file.clone()),
+            Self::File(file) => Self::File(File::new(file.name.to_string(), file.size)),
             Self::Directory(dir) => dir.insert_item(path, item),
         }
     }
@@ -91,13 +84,16 @@ impl Inode {
     }
 }
 
-#[derive(Clone)]
 struct File {
     name: String,
     size: usize,
 }
 
 impl File {
+    fn new(name: String, size: usize) -> File {
+        File { name, size }
+    }
+
     fn is_same(&self, other: &File) -> bool {
         self.name.eq(&other.name) && self.size == other.size
     }
@@ -105,30 +101,25 @@ impl File {
 
 struct Directory {
     name: String,
-    content: Vec<Inode>,
-}
-
-impl Clone for Directory {
-    fn clone(&self) -> Self {
-        Self {
-            name: self.name.clone(),
-            content: self.content.to_vec(),
-        }
-    }
+    content: Vec<Rc<Inode>>,
 }
 
 impl Directory {
-    fn insert_item(&self, path: &[&str], item: &Inode) -> Inode {
+    fn new(name: String, content: Vec<Rc<Inode>>) -> Directory {
+        Directory { name, content }
+    }
+
+    fn insert_item(&self, path: &[&str], item: &Rc<Inode>) -> Inode {
         match path.first() {
             Some(first) => {
-                let content: Vec<Inode> = self
+                let content: Vec<Rc<Inode>> = self
                     .content
                     .iter()
                     .map(|inode| {
                         if inode.is_dir_with_name(first) {
-                            inode.insert_item(&path[1..], item)
+                            Rc::new(inode.insert_item(&path[1..], item))
                         } else {
-                            inode.clone()
+                            Rc::clone(inode)
                         }
                     })
                     .collect();
@@ -138,8 +129,8 @@ impl Directory {
                 })
             }
             None => {
-                let mut content: Vec<Inode> = self.content.to_vec();
-                content.push(item.clone());
+                let mut content: Vec<_> = self.content.to_vec();
+                content.push(Rc::clone(&item));
                 Inode::Directory(Self {
                     name: self.name.clone(),
                     content: content,
@@ -211,10 +202,10 @@ mod tests {
     #[test]
     fn test_insert_item() {
         let fs2 = create_example_fs2();
-        let item = Inode::File(File {
+        let item = Rc::new(Inode::File(File {
             name: String::from("i"),
             size: 5,
-        });
+        }));
         let fs3 = fs2.insert_item(&vec!["c", "f"], &item);
         assert!(fs3.is_same(&create_example_fs3()));
     }
@@ -223,59 +214,59 @@ mod tests {
         Inode::Directory(Directory {
             name: String::from("/"),
             content: vec![
-                Inode::Directory(Directory {
+                Rc::new(Inode::Directory(Directory {
                     name: String::from("a"),
                     content: vec![
-                        Inode::Directory(Directory {
+                        Rc::new(Inode::Directory(Directory {
                             name: String::from("e"),
-                            content: vec![Inode::File(File {
+                            content: vec![Rc::new(Inode::File(File {
                                 name: String::from("i"),
                                 size: 584,
-                            })],
-                        }),
-                        Inode::File(File {
+                            }))],
+                        })),
+                        Rc::new(Inode::File(File {
                             name: String::from("f"),
                             size: 29116,
-                        }),
-                        Inode::File(File {
+                        })),
+                        Rc::new(Inode::File(File {
                             name: String::from("g"),
                             size: 2557,
-                        }),
-                        Inode::File(File {
+                        })),
+                        Rc::new(Inode::File(File {
                             name: String::from("h.lst"),
                             size: 62596,
-                        }),
+                        })),
                     ],
-                }),
-                Inode::File(File {
+                })),
+                Rc::new(Inode::File(File {
                     name: String::from("b.txt"),
                     size: 14848514,
-                }),
-                Inode::File(File {
+                })),
+                Rc::new(Inode::File(File {
                     name: String::from("c.dat"),
                     size: 8504156,
-                }),
-                Inode::Directory(Directory {
+                })),
+                Rc::new(Inode::Directory(Directory {
                     name: String::from("d"),
                     content: vec![
-                        Inode::File(File {
+                        Rc::new(Inode::File(File {
                             name: String::from("j"),
                             size: 4060174,
-                        }),
-                        Inode::File(File {
+                        })),
+                        Rc::new(Inode::File(File {
                             name: String::from("d.log"),
                             size: 8033020,
-                        }),
-                        Inode::File(File {
+                        })),
+                        Rc::new(Inode::File(File {
                             name: String::from("d.ext"),
                             size: 5626152,
-                        }),
-                        Inode::File(File {
+                        })),
+                        Rc::new(Inode::File(File {
                             name: String::from("k"),
                             size: 7214296,
-                        }),
+                        })),
                     ],
-                }),
+                })),
             ],
         })
     }
@@ -284,36 +275,36 @@ mod tests {
         Inode::Directory(Directory {
             name: String::from("a"),
             content: vec![
-                Inode::File(File {
+                Rc::new(Inode::File(File {
                     name: String::from("b"),
                     size: 5,
-                }),
-                Inode::Directory(Directory {
+                })),
+                Rc::new(Inode::Directory(Directory {
                     name: String::from("c"),
                     content: vec![
-                        Inode::File(File {
+                        Rc::new(Inode::File(File {
                             name: String::from("e"),
                             size: 5,
-                        }),
-                        Inode::Directory(Directory {
+                        })),
+                        Rc::new(Inode::Directory(Directory {
                             name: String::from("f"),
                             content: vec![
-                                Inode::File(File {
+                                Rc::new(Inode::File(File {
                                     name: String::from("g"),
                                     size: 5,
-                                }),
-                                Inode::File(File {
+                                })),
+                                Rc::new(Inode::File(File {
                                     name: String::from("h"),
                                     size: 5,
-                                }),
+                                })),
                             ],
-                        }),
+                        })),
                     ],
-                }),
-                Inode::File(File {
+                })),
+                Rc::new(Inode::File(File {
                     name: String::from("d"),
                     size: 5,
-                }),
+                })),
             ],
         })
     }
@@ -322,40 +313,40 @@ mod tests {
         Inode::Directory(Directory {
             name: String::from("a"),
             content: vec![
-                Inode::File(File {
+                Rc::new(Inode::File(File {
                     name: String::from("b"),
                     size: 5,
-                }),
-                Inode::Directory(Directory {
+                })),
+                Rc::new(Inode::Directory(Directory {
                     name: String::from("c"),
                     content: vec![
-                        Inode::File(File {
+                        Rc::new(Inode::File(File {
                             name: String::from("e"),
                             size: 5,
-                        }),
-                        Inode::Directory(Directory {
+                        })),
+                        Rc::new(Inode::Directory(Directory {
                             name: String::from("f"),
                             content: vec![
-                                Inode::File(File {
+                                Rc::new(Inode::File(File {
                                     name: String::from("g"),
                                     size: 5,
-                                }),
-                                Inode::File(File {
+                                })),
+                                Rc::new(Inode::File(File {
                                     name: String::from("h"),
                                     size: 5,
-                                }),
-                                Inode::File(File {
+                                })),
+                                Rc::new(Inode::File(File {
                                     name: String::from("i"),
                                     size: 5,
-                                }),
+                                })),
                             ],
-                        }),
+                        })),
                     ],
-                }),
-                Inode::File(File {
+                })),
+                Rc::new(Inode::File(File {
                     name: String::from("d"),
                     size: 5,
-                }),
+                })),
             ],
         })
     }
